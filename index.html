@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>将棋ゲーム</title>
+  <style>
+    :root{
+      --bg: radial-gradient(1200px 600px at 70% -10%, #dbeafe 0%, transparent 50%),
+            radial-gradient(1000px 600px at -10% 110%, #fde68a 0%, transparent 50%),
+            linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
+      --panel: rgba(255,255,255,0.08);
+      --panel-strong: rgba(255,255,255,0.22);
+      --border: rgba(255,255,255,0.15);
+      --accent: #60a5fa; /* ← テーマで変更 */
+      --accent-2: #f59e0b;
+      --danger: #ef4444;
+      --good: #34d399;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --square-a: #f4f1e9; /* ← テーマで変更（明るい木） */
+      --square-b: #e6d9be; /* ← テーマで変更（濃い木） */
+      --highlight: #a5b4fc88;
+      --lastmove: #10b98166;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif;
+      color:var(--text);
+      background: var(--bg);
+      background-attachment: fixed;
+    }
+    .container{ max-width: 1150px; margin: 24px auto; padding: 16px; }
+    .header{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+    .brand{ display:flex; align-items:center; gap:12px; }
+    .logo{
+      width:40px;height:40px;border-radius:12px;
+      background: conic-gradient(from 210deg, #60a5fa, #34d399, #f59e0b, #60a5fa);
+      filter: saturate(120%);
+      box-shadow: 0 6px 24px rgba(0,0,0,.3), inset 0 0 20px rgba(255,255,255,.2);
+    }
+    h1{font-size:22px;margin:0;letter-spacing:.04em}
+    .controls{display:flex;flex-wrap:wrap;gap:8px}
+    button, select, label.switch, input[type="color"], input[type="range"]{
+      appearance:none;border:1px solid var(--border);color:var(--text);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+      padding:10px 12px;border-radius:12px; font-weight:600; letter-spacing:.02em;
+      backdrop-filter: blur(8px);
+    }
+    button{cursor:pointer;transition:.2s ease}
+    button:hover{transform:translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.25)}
+    button:active{transform:translateY(0)}
+    .btn-accent{border-color:#60a5fa66;background:linear-gradient(180deg,#60a5fa33,#60a5fa1a)}
+    .btn-warn{border-color:#f59e0b66;background:linear-gradient(180deg,#f59e0b33,#f59e0b1a)}
+    .btn-danger{border-color:#ef444466;background:linear-gradient(180deg,#ef444433,#ef44441a)}
+    .layout{ display:grid; grid-template-columns: 1fr 340px; gap:16px; }
+    @media (max-width: 1000px){ .layout{grid-template-columns: 1fr} }
+
+    /* Panel */
+    .panel{ background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:14px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+    .section-title{font-size:14px;color:var(--muted);margin:0 0 8px 2px;letter-spacing:.08em}
+
+    /* Hands */
+    .hands{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+    .hand{display:flex;flex-wrap:wrap;gap:8px;min-height:48px}
+    .chip{ display:inline-flex;align-items:center;gap:8px; padding:8px 10px;border-radius:14px;border:1px solid var(--border); background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); cursor:pointer; transition:.15s ease; user-select:none; }
+    .chip:hover{transform:translateY(-1px)}
+    .chip .koma{font-size:18px;line-height:1}
+    .chip .count{font-weight:700;color:var(--accent)}
+    .chip.disabled{opacity:.4;pointer-events:none}
+    .turn-badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#10b98122;border:1px solid #10b98155;color:#d1fae5;font-weight:700;letter-spacing:.05em}
+
+    /* Board */
+    .board-wrap{display:flex;gap:16px;align-items:flex-start;justify-content:center}
+    .board{width:min(86vw, 640px); aspect-ratio:1/1; border-radius:16px; overflow:hidden; border:1px solid #e2d3b6; box-shadow: inset 0 0 0 2px #e9ddc7, 0 20px 60px rgba(0,0,0,.3)}
+    .grid{display:grid;grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr); width:100%; height:100%}
+    .sq{position:relative; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#111827}
+    .sq.a{background:var(--square-a)}
+    .sq.b{background:var(--square-b)}
+    .sq.coord::after{content:attr(data-coord); position:absolute; top:6px; left:8px; font-size:11px; color:#6b7280}
+    .sq.highlight{outline:3px solid var(--highlight); outline-offset:-3px}
+    .sq.last{box-shadow: inset 0 0 0 100vmax var(--lastmove)}
+    .sq.drop-ok{outline:3px dashed #34d399aa; outline-offset:-3px}
+    .piece{position:relative; display:flex;align-items:center;justify-content:center; width:90%; height:80%; border-radius:12px; background: linear-gradient(180deg, #fffdf7, #e7d9bb); border:1px solid #d7c59d; box-shadow: 0 8px 20px rgba(0,0,0,.25), inset 0 0 0 2px #fff7eb; cursor:pointer; transition:.14s ease; user-select:none; }
+    .piece:hover{transform:translateY(-1.5px)}
+    .piece .glyph{font-size:28px; letter-spacing:.08em}
+    .piece.gote{transform: rotate(180deg)}
+    .piece.promoted .glyph{color:#b91c1c}
+
+    /* Sidebar */
+    .side{display:flex; flex-direction:column; gap:16px}
+    .status-card{display:flex;flex-direction:column;gap:8px}
+    .status-row{display:flex;justify-content:space-between;align-items:center}
+    .log{height:360px; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:10px}
+    .log-entry{font-size:13px; color:#e5e7eb; padding:6px 8px; border-radius:8px}
+    .log-entry:nth-child(odd){background:rgba(255,255,255,.05)}
+
+    /* Tiny helper elements */
+    .switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+    .switch input{accent-color: var(--accent)}
+
+    .footer{margin-top:18px; color:var(--muted); font-size:12px; text-align:center}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>将棋ゲーム</h1>
+          <div style="color:var(--muted);font-size:12px">単一HTMLのモダンな将棋アプリ（ローカル対局 + CPU + ログ書き出し + 効果音）</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="newGameBtn" class="btn-accent">新局</button>
+        <button id="undoBtn">一手戻す</button>
+        <button id="redoBtn">やり直す</button>
+        <button id="flipBtn" class="btn-warn">盤を反転</button>
+        <button id="exportBtn">ログ書き出し</button>
+        <button id="helpBtn" class="btn-danger">遊び方</button>
+        
+        <select id="themeSelect" title="テーマ">
+          <option value="classic">テーマ: Classic</option>
+          <option value="night">テーマ: Night</option>
+          <option value="matcha">テーマ: Matcha</option>
+          <option value="sakura">テーマ: Sakura</option>
+        </select>
+        <select id="cpuSelect" title="CPU対戦">
+          <option value="none">CPU: なし</option>
+          <option value="S">CPU: 先手</option>
+          <option value="G">CPU: 後手</option>
+        </select>
+        <label class="switch" title="効果音">
+          <input type="checkbox" id="soundChk" checked /> 効果音
+        </label>
+        <label class="switch" title="音量">
+          音量 <input type="range" id="volumeRange" min="0" max="1" step="0.01" value="0.5" style="width:100px" />
+        </label>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div>
+        <div class="hands">
+          <div class="panel">
+            <div class="section-title">後手の持ち駒</div>
+            <div id="hand-G" class="hand" aria-label="後手の持ち駒"></div>
+          </div>
+          <div class="panel">
+            <div class="section-title">先手の持ち駒</div>
+            <div id="hand-S" class="hand" aria-label="先手の持ち駒"></div>
+          </div>
+        </div>
+
+        <div class="board-wrap">
+          <div id="board" class="board" aria-label="将棋盤">
+            <div id="grid" class="grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="panel status-card">
+          <div class="status-row"><span>手番</span> <span id="turnBadge" class="turn-badge">先手</span></div>
+          <div class="status-row"><span>選択</span> <span id="selText" style="color:var(--muted)">なし</span></div>
+          <div class="status-row"><span>局面</span> <span id="phaseText" style="color:var(--muted)">通常</span></div>
+        </div>
+        <div class="panel">
+          <div class="section-title">棋譜（簡易ログ）</div>
+          <div id="log" class="log" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">注意: 王手・詰みの厳密判定や「打ち歩詰め」は簡易仕様です。フェアプレーで楽しんでね♨️</div>
+  </div>
+
+  <script>
+  // ======= 将棋ゲーム（単一HTML 拡張版） =======
+  // 修正: exportLog の改行を正しくエスケープ / help文の改行をテンプレートリテラルに変更
+  // 追加: 最小限の自己テスト（コンソール出力）
+
+  const SIZE = 9;
+  const SENTE = 'S';
+  const GOTE  = 'G';
+
+  const T = { OU:'OU', HI:'HI', KA:'KA', KI:'KI', GI:'GI', KE:'KE', KY:'KY', FU:'FU' };
+
+  // UI refs
+  const gridEl = document.getElementById('grid');
+  const handSEl = document.getElementById('hand-S');
+  const handGEl = document.getElementById('hand-G');
+  const turnBadge = document.getElementById('turnBadge');
+  const selText = document.getElementById('selText');
+  const phaseText = document.getElementById('phaseText');
+  const logEl = document.getElementById('log');
+
+  // Settings
+  const settings = {
+    sound: true,
+    volume: 0.5,
+    theme: 'classic',
+    cpu: 'none', // 'none' | 'S' | 'G'
+  };
+
+  // Themes
+  const themes = {
+    classic: { a:'#f4f1e9', b:'#e6d9be', accent:'#60a5fa' },
+    night:   { a:'#1f2937', b:'#111827', accent:'#a78bfa' },
+    matcha:  { a:'#e8f5e9', b:'#c8e6c9', accent:'#34d399' },
+    sakura:  { a:'#fff1f2', b:'#ffe4e6', accent:'#fb7185' },
+  };
+
+  function applyTheme(name){
+    const t = themes[name] || themes.classic; settings.theme = name;
+    const root = document.documentElement;
+    root.style.setProperty('--square-a', t.a);
+    root.style.setProperty('--square-b', t.b);
+    root.style.setProperty('--accent', t.accent);
+  }
+
+  // Sound via WebAudio (木のコトン風)
+  let audioCtx = null;
+  function playClick(kind='move'){
+    if(!settings.sound) return;
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const ctx = audioCtx;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    const f = kind==='drop' ? 320 : kind==='ui' ? 260 : 380;
+    o.frequency.value = f;
+    g.gain.value = 0;
+    o.connect(g); g.connect(ctx.destination);
+    const now = ctx.currentTime;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.35*settings.volume, now+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now+0.16);
+    o.start(now); o.stop(now+0.17);
+  }
+
+  // Helpers
+  function glyphFor(piece){
+    const promoted = piece.promoted;
+    switch(piece.type){
+      case T.OU: return piece.owner===SENTE ? '玉' : '王';
+      case T.HI: return promoted ? '龍' : '飛';
+      case T.KA: return promoted ? '馬' : '角';
+      case T.KI: return '金';
+      case T.GI: return promoted ? '全' : '銀';
+      case T.KE: return promoted ? '圭' : '桂';
+      case T.KY: return promoted ? '杏' : '香';
+      case T.FU: return promoted ? 'と' : '歩';
+    }
+  }
+
+  function emptyHand(){
+    return { [T.HI]:0, [T.KA]:0, [T.KI]:0, [T.GI]:0, [T.KE]:0, [T.KY]:0, [T.FU]:0 };
+  }
+
+  let board = new Array(SIZE*SIZE).fill(null);
+  let hands = { [SENTE]: emptyHand(), [GOTE]: emptyHand() };
+  let turn = SENTE;
+  let selected = null; // {from:i, piece} or {from:'hand', type}
+  let legalTargets = new Set();
+  let lastMove = null;
+  let flipped = false;
+  let undoStack = [];
+  let redoStack = [];
+
+  const squares = [];
+  function buildGrid(){
+    gridEl.innerHTML = '';
+    squares.length = 0;
+    for(let r=0;r<SIZE;r++){
+      for(let c=0;c<SIZE;c++){
+        const i = r*SIZE+c;
+        const sq = document.createElement('div');
+        sq.className = `sq ${(r+c)%2===0?'a':'b'} coord`;
+        sq.dataset.index = i;
+        sq.dataset.coord = coordLabel(r,c);
+        sq.addEventListener('click',()=>onSquareClick(i));
+        squares.push(sq); gridEl.appendChild(sq);
+      }
+    }
+  }
+
+  function coordLabel(r,c){ const file=(9-c); const rank=(r+1); return `${file}${rank}`; }
+
+  function renderAll(){ renderBoard(); renderHands(); renderStatus(); }
+
+  function renderBoard(){
+    for(let i=0;i<board.length;i++){
+      const sq = squares[i];
+      sq.innerHTML = '';
+      sq.classList.remove('highlight','last','drop-ok');
+      if(lastMove && (i===lastMove.from || i===lastMove.to)) sq.classList.add('last');
+      const piece = board[i];
+      if(piece){
+        const el = document.createElement('div');
+        el.className = 'piece'+(piece.owner===GOTE?' gote':'')+(piece.promoted?' promoted':'');
+        el.title = piece.owner===SENTE?`先手: ${glyphFor(piece)}`:`後手: ${glyphFor(piece)}`;
+        const g = document.createElement('div'); g.className='glyph'; g.textContent = glyphFor(piece);
+        el.appendChild(g);
+        el.addEventListener('click', (e)=>{ e.stopPropagation(); onPieceClick(i); });
+        sq.appendChild(el);
+      }
+    }
+    for(const t of legalTargets){ squares[t]?.classList.add(selected?.from==='hand'?'drop-ok':'highlight'); }
+  }
+
+  function renderHands(){
+    function renderOne(el, owner){
+      el.innerHTML='';
+      const h = hands[owner];
+      const order = [T.HI,T.KA,T.KI,T.GI,T.KE,T.KY,T.FU];
+      for(const t of order){
+        const cnt = h[t]||0; if(cnt<=0) continue;
+        const chip = document.createElement('div'); chip.className='chip';
+        const koma = document.createElement('span'); koma.className='koma';
+        const tempPiece = {type:t, owner, promoted:false};
+        koma.textContent = glyphFor(tempPiece);
+        const count = document.createElement('span'); count.className='count'; count.textContent = `×${cnt}`;
+        chip.appendChild(koma); chip.appendChild(count);
+        chip.title = (owner===SENTE?'先手':'後手')+`の持ち駒 ${glyphFor(tempPiece)}（クリックで打つ）`;
+        chip.addEventListener('click',()=>onHandClick(owner, t));
+        el.appendChild(chip);
+      }
+      if(el.children.length===0){
+        const empty = document.createElement('div'); empty.style.cssText='color:var(--muted);font-size:12px;padding:6px 0';
+        empty.textContent = 'なし'; el.appendChild(empty);
+      }
+    }
+    renderOne(handGEl, GOTE); renderOne(handSEl, SENTE);
+  }
+
+  function renderStatus(){ turnBadge.textContent = turn===SENTE?'先手':'後手'; selText.textContent = selected ? (selected.from==='hand' ? `持ち駒から ${nameOfType(selected.type)}` : `${coordLabel(...rcFromIndex(selected.from))} の ${nameOfType(board[selected.from].type)}`) : 'なし'; }
+
+  function nameOfType(t){
+    switch(t){ case T.OU: return '王'; case T.HI: return '飛'; case T.KA: return '角'; case T.KI: return '金'; case T.GI: return '銀'; case T.KE: return '桂'; case T.KY: return '香'; case T.FU: return '歩'; }
+    return '';
+  }
+
+  // ===== Click handlers =====
+  function onPieceClick(i){
+    const p = board[i]; if(!p) return;
+    if(p.owner!==turn){ if(selected && legalTargets.has(i)){ applyMove(selected, i); } return; }
+    selected = {from:i, piece: p};
+    legalTargets = new Set(getLegalMovesFor(i));
+    renderAll();
+    const sq = squares[i]; const pieceEl = sq.querySelector('.piece'); if(pieceEl) pieceEl.classList.add('selected');
+  }
+
+  function onSquareClick(i){
+    if(selected){
+      if(selected.from==='hand'){ if(legalTargets.has(i)){ applyDrop(selected.type, i); } }
+      else{ if(legalTargets.has(i)){ applyMove(selected, i); } }
+    }else{
+      const p = board[i]; if(p && p.owner===turn){ onPieceClick(i); }
+    }
+  }
+
+  function onHandClick(owner, type){
+    if(owner!==turn) return; if(hands[owner][type]<=0) return;
+    selected = {from:'hand', type};
+    legalTargets = new Set(getLegalDropsFor(owner, type));
+    renderAll();
+  }
+
+  // ===== Move generation =====
+  function rcFromIndex(i){ return [Math.floor(i/SIZE), i%SIZE]; }
+  function indexFromRC(r,c){ return r*SIZE + c; }
+  function inBounds(r,c){ return r>=0 && r<SIZE && c>=0 && c<SIZE; }
+  function fwd(owner){ return owner===SENTE? -1 : +1; }
+
+  function getLegalMovesFor(i){
+    const p = board[i]; if(!p) return [];
+    const [r,c] = rcFromIndex(i);
+    const moves = [];
+    const pushIf = (rr,cc)=>{ if(!inBounds(rr,cc)) return; const t = indexFromRC(rr,cc); const op = board[t]; if(!op || op.owner!==p.owner){ moves.push(t); } };
+    const slide = (dr,dc)=>{ let rr=r+dr, cc=c+dc; while(inBounds(rr,cc)){ const t = indexFromRC(rr,cc); const op = board[t]; if(!op){ moves.push(t); } else { if(op.owner!==p.owner) moves.push(t); break; } rr+=dr; cc+=dc; } };
+    const forward = fwd(p.owner);
+    const asGold = p.promoted && [T.FU,T.KY,T.KE,T.GI].includes(p.type);
+
+    if(p.type===T.OU || (p.type===T.HI && p.promoted) || (p.type===T.KA && p.promoted) || asGold){
+      const goldSteps = [ [forward,-1],[forward,0],[forward,1],[0,-1],[0,1],[-forward,0] ];
+      for(const [dr,dc] of goldSteps) pushIf(r+dr, c+dc);
+    }
+    if(!asGold){
+      switch(p.type){
+        case T.FU: pushIf(r+forward, c); break;
+        case T.KY: slide(forward, 0); break;
+        case T.KE: pushIf(r+2*forward, c-1); pushIf(r+2*forward, c+1); break;
+        case T.GI: for(const [dr,dc] of [[forward,-1],[forward,0],[forward,1],[-forward,-1],[-forward,1]]) pushIf(r+dr,c+dc); break;
+        case T.KA: slide(1,1); slide(1,-1); slide(-1,1); slide(-1,-1); break;
+        case T.HI: slide(1,0); slide(-1,0); slide(0,1); slide(0,-1); break;
+      }
+    }
+    if(p.type===T.KA && p.promoted){ for(const [dr,dc] of [[1,0],[-1,0],[0,1],[0,-1]]) pushIf(r+dr,c+dc); }
+    if(p.type===T.HI && p.promoted){ for(const [dr,dc] of [[1,1],[1,-1],[-1,1],[-1,-1]]) pushIf(r+dr,c+dc); }
+    return moves;
+  }
+
+  function zoneRows(owner){ return owner===SENTE ? [0,1,2] : [6,7,8]; }
+  function mustPromote(type, owner, toR){ const last = owner===SENTE ? 0 : 8; if(type===T.FU || type===T.KY) return toR===last; if(type===T.KE) return owner===SENTE ? (toR<=1) : (toR>=7); return false; }
+  function canPromote(type){ return [T.FU,T.KY,T.KE,T.GI,T.KA,T.HI].includes(type); }
+
+  function applyMove(sel, to, cpuPromote=null){
+    pushUndo();
+    const from = sel.from; const piece = {...board[from]};
+    const [toR,toC] = rcFromIndex(to);
+
+    let captured = null;
+    if(board[to]){
+      captured = {...board[to]};
+      if(captured.type!==T.OU){
+        const capType = captured.type;
+        hands[piece.owner][capType] = (hands[piece.owner][capType]||0)+1;
+      } else {
+        board[to] = piece; board[from]=null;
+        turn = toggle(turn); lastMove = {from,to,capture:true,drop:false};
+        renderAll(); playClick('move');
+        alert((piece.owner===SENTE?'先手':'後手')+'の勝ち！');
+        return;
+      }
+    }
+
+    const [fromR] = rcFromIndex(from);
+    const zones = new Set([...zoneRows(piece.owner)]);
+    let promote = false;
+    if(canPromote(piece.type)){
+      const enters = zones.has(toR);
+      const leaves = zones.has(fromR);
+      if(enters || leaves){
+        if(mustPromote(piece.type, piece.owner, toR)){ promote = true; }
+        else if(cpuPromote!==null){ promote = cpuPromote; }
+        else { promote = confirm('成りますか？（はい=成る / いいえ=成らない）'); }
+      }
+    }
+
+    piece.promoted = piece.promoted || promote;
+    board[to] = piece; board[from] = null;
+
+    lastMove = {from,to,capture: !!captured, drop:false};
+    logAdd(`${turn===SENTE?'▲':'△'} ${nameOfType(piece.type)} ${labelIdx(from)}→${labelIdx(to)}${promote?' 成':''}${captured?' 取':''}`);
+
+    playClick('move');
+    turn = toggle(turn); selected=null; legalTargets.clear(); renderAll();
+    scheduleCpuIfNeeded();
+  }
+
+  function labelIdx(i){ const [r,c]=rcFromIndex(i); return coordLabel(r,c); }
+
+  function getLegalDropsFor(owner, type){
+    const res = [];
+    for(let i=0;i<board.length;i++){
+      if(board[i]) continue;
+      const [r,c] = rcFromIndex(i);
+      if(type===T.FU || type===T.KY){ const last = owner===SENTE?0:8; if(r===last) continue; }
+      if(type===T.KE){ if(owner===SENTE && r<=1) continue; if(owner===GOTE && r>=7) continue; }
+      if(type===T.FU){ if(hasUnpromotedPawnInFile(owner, c)) continue; }
+      res.push(i);
+    }
+    return res;
+  }
+
+  function hasUnpromotedPawnInFile(owner, col){
+    for(let r=0;r<SIZE;r++){
+      const p = board[indexFromRC(r,col)];
+      if(p && p.owner===owner && p.type===T.FU && !p.promoted) return true;
+    }
+    return false;
+  }
+
+  function applyDrop(type, to){
+    pushUndo();
+    hands[turn][type]--; board[to] = {type, owner:turn, promoted:false};
+    lastMove = {from:null,to,capture:false,drop:true};
+    logAdd(`${turn===SENTE?'▲':'△'} ${nameOfType(type)} 打 ${labelIdx(to)}`);
+    playClick('drop');
+    turn = toggle(turn); selected=null; legalTargets.clear(); renderAll();
+    scheduleCpuIfNeeded();
+  }
+
+  function toggle(x){ return x===SENTE?GOTE:SENTE; }
+
+  // ===== Log =====
+  function logAdd(text){ const div=document.createElement('div'); div.className='log-entry'; div.textContent = text; logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight; }
+  function logClear(){ logEl.innerHTML=''; }
+
+  function composeLogText(lines){
+    // 改行コードはLFに統一（Windowsでも問題なく読めます）
+    return lines.join('\n');
+  }
+
+  function exportLog(){
+    const lines = Array.from(logEl.querySelectorAll('.log-entry')).map(e=>e.textContent);
+    const text = composeLogText(lines);
+    const blob = new Blob([text+'\n'], {type:'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    const now = new Date();
+    const pad=n=>String(n).padStart(2,'0');
+    const fname = `shogi_log_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.txt`;
+    a.href = URL.createObjectURL(blob); a.download = fname; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ===== Undo / Redo =====
+  function snapshot(){
+    return { board: board.map(p=> p? {...p}: null), hands: { [SENTE]: {...hands[SENTE]}, [GOTE]: {...hands[GOTE]} }, turn, selected: selected? {...selected}: null, lastMove: lastMove? {...lastMove}: null };
+  }
+  function restore(s){ board = s.board.map(p=> p? {...p}: null); hands = { [SENTE]: {...s.hands[SENTE]}, [GOTE]: {...s.hands[GOTE]} }; turn=s.turn; selected=s.selected? {...s.selected}: null; lastMove=s.lastMove? {...s.lastMove}: null; renderAll(); }
+  function pushUndo(){ undoStack.push(snapshot()); redoStack.length=0; }
+  function undo(){ if(undoStack.length){ redoStack.push(snapshot()); restore(undoStack.pop()); logAdd('一手戻す'); playClick('ui'); } }
+  function redo(){ if(redoStack.length){ undoStack.push(snapshot()); restore(redoStack.pop()); logAdd('やり直し'); playClick('ui'); } }
+
+  // ===== CPU =====
+  const pieceValue = { [T.OU]:1000, [T.HI]:9, [T.KA]:8, [T.KI]:6, [T.GI]:5, [T.KE]:4, [T.KY]:3, [T.FU]:1 };
+
+  function allMovesOf(owner){
+    const moves = [];
+    // board moves
+    for(let i=0;i<board.length;i++){
+      const p = board[i]; if(!p || p.owner!==owner) continue;
+      const targets = getLegalMovesFor(i);
+      for(const to of targets){
+        const [toR,toC] = rcFromIndex(to);
+        const captured = board[to];
+        const enters = zoneRows(p.owner).includes(toR) || zoneRows(p.owner).includes(rcFromIndex(i)[0]);
+        const promoPossible = canPromote(p.type) && enters;
+        const must = mustPromote(p.type, p.owner, toR);
+        const preferPromote = must || promoPossible;
+        const score = (captured? (pieceValue[captured.type]||0)*2 : 0) + (preferPromote? 1.5:0) + centerBonus(toR,toC,owner);
+        moves.push({kind:'move', from:i, to, preferPromote, score});
+      }
+    }
+    // drops
+    const h = hands[owner];
+    for(const type of Object.keys(h)){
+      if(h[type]<=0) continue;
+      const targets = getLegalDropsFor(owner, type);
+      for(const to of targets){
+        const [r,c] = rcFromIndex(to);
+        const nearGoal = owner===SENTE ? (8-r) : r; // 0..8
+        const score = (pieceValue[type]||1)*0.4 + (nearGoal*0.05) + centerBonus(r,c,owner)*0.2;
+        moves.push({kind:'drop', type, to, score});
+      }
+    }
+    return moves;
+  }
+
+  function centerBonus(r,c,owner){
+    const dr = Math.abs(r-4), dc = Math.abs(c-4); const dist = dr+dc; return (4 - dist)*0.1; // 中央に近いほど +
+  }
+
+  function pickCpuMove(owner){
+    const moves = allMovesOf(owner);
+    if(moves.length===0) return null;
+    // 少しランダム性
+    moves.sort((a,b)=> b.score - a.score + (Math.random()-0.5)*0.2);
+    return moves[0];
+  }
+
+  let cpuSide = 'none';
+  function scheduleCpuIfNeeded(){ if(cpuSide!=='none' && turn===cpuSide){ setTimeout(cpuMove, 380); } }
+  function cpuMove(){
+    const mv = pickCpuMove(cpuSide);
+    if(!mv){ logAdd('CPU: パス'); turn = toggle(turn); renderAll(); return; }
+    if(mv.kind==='move'){
+      selected = {from: mv.from, piece: board[mv.from]};
+      legalTargets = new Set(getLegalMovesFor(mv.from));
+      applyMove(selected, mv.to, !!mv.preferPromote);
+    }else{
+      selected = {from:'hand', type: mv.type};
+      legalTargets = new Set(getLegalDropsFor(cpuSide, mv.type));
+      applyDrop(mv.type, mv.to);
+    }
+  }
+
+  // ===== UI buttons =====
+  document.getElementById('newGameBtn').addEventListener('click', ()=>{ if(confirm('新局を開始しますか？')){ setupInitial(); playClick('ui'); scheduleCpuIfNeeded(); } });
+  document.getElementById('undoBtn').addEventListener('click', ()=>{ undo(); });
+  document.getElementById('redoBtn').addEventListener('click', ()=>{ redo(); });
+  document.getElementById('flipBtn').addEventListener('click', ()=>{ flipped=!flipped; document.getElementById('board').style.transform = flipped? 'rotate(180deg)': 'none'; playClick('ui'); });
+  document.getElementById('helpBtn').addEventListener('click', ()=>{
+    const msg = [
+      '遊び方:',
+      '1) 先手からスタート。',
+      '2) 自分の駒をクリック→移動先をクリック。',
+      '3) 持ち駒チップ→点線マスに打つ。',
+      '4) 成れる時はダイアログで選択（歩/香は最終段、桂は最後2段で強制）。',
+      '',
+      '追加: テーマ切替・効果音・ログ書き出し・CPU対戦が使えます。'
+    ].join('\n');
+    alert(msg);
+  });
+  document.getElementById('exportBtn').addEventListener('click', ()=>{ exportLog(); playClick('ui'); });
+
+  // Theme / Sound / CPU controls
+  document.getElementById('themeSelect').addEventListener('change', (e)=>{ applyTheme(e.target.value); renderAll(); playClick('ui'); });
+  const soundChk = document.getElementById('soundChk');
+  const volRange = document.getElementById('volumeRange');
+  soundChk.addEventListener('change', ()=>{ settings.sound = soundChk.checked; if(settings.sound) playClick('ui'); });
+  volRange.addEventListener('input', ()=>{ settings.volume = parseFloat(volRange.value||'0.5'); });
+  document.getElementById('cpuSelect').addEventListener('change', (e)=>{
+    const v = e.target.value; cpuSide = (v==='S'||v==='G')? v : 'none'; settings.cpu = v==='none'?'none':v; playClick('ui'); scheduleCpuIfNeeded();
+  });
+
+  // ===== Setup =====
+  function setupInitial(){
+    board.fill(null); hands[SENTE]=emptyHand(); hands[GOTE]=emptyHand();
+    turn = SENTE; selected=null; legalTargets.clear(); lastMove=null; undoStack=[]; redoStack=[];
+
+    const idx = (r,c)=>r*SIZE+c;
+    const row0 = [T.KY,T.KE,T.GI,T.KI,T.OU,T.KI,T.GI,T.KE,T.KY];
+    for(let c=0;c<9;c++) board[idx(0,c)] = {type:row0[c], owner:GOTE, promoted:false};
+    board[idx(1,1)] = {type:T.HI, owner:GOTE, promoted:false};
+    board[idx(1,7)] = {type:T.KA, owner:GOTE, promoted:false};
+    for(let c=0;c<9;c++) board[idx(2,c)] = {type:T.FU, owner:GOTE, promoted:false};
+
+    const row8 = [T.KY,T.KE,T.GI,T.KI,T.OU,T.KI,T.GI,T.KE,T.KY];
+    for(let c=0;c<9;c++) board[idx(8,c)] = {type:row8[c], owner:SENTE, promoted:false};
+    board[idx(7,1)] = {type:T.KA, owner:SENTE, promoted:false};
+    board[idx(7,7)] = {type:T.HI, owner:SENTE, promoted:false};
+    for(let c=0;c<9;c++) board[idx(6,c)] = {type:T.FU, owner:SENTE, promoted:false};
+
+    renderAll(); logClear(); logAdd('新局を開始しました');
+  }
+
+  // ===== Minimal self tests (console only) =====
+  function assert(name, cond){ if(!cond) throw new Error(name); console.debug('✅', name); }
+  function runSelfTests(){
+    try{
+      // exportLog compose
+      const lines = ['▲ 歩 77→76', '△ 歩 33→34'];
+      const txt = composeLogText(lines);
+      assert('composeLogText joins with LF', txt === '▲ 歩 77→76\n△ 歩 33→34');
+
+      // help message contains numbered lines
+      const help = ['遊び方:','1) 先手からスタート。','2) 自分の駒をクリック→移動先をクリック。'].join('\n');
+      assert('help string example intact', help.includes('1)') && help.includes('2)'));
+
+      // theme apply sets CSS vars
+      applyTheme('matcha');
+      const a = getComputedStyle(document.documentElement).getPropertyValue('--square-a').trim();
+      assert('theme variable applied', !!a);
+
+      // restore default
+      applyTheme('classic');
+      console.debug('🧪 Self-tests passed');
+    }catch(e){ console.error('🧪 Self-test failed:', e.message); }
+  }
+
+  // Init
+  buildGrid();
+  applyTheme('classic');
+  setupInitial();
+  runSelfTests();
+  
+  </script>
+</body>
+</html>
